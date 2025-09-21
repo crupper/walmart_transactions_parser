@@ -1,3 +1,5 @@
+**/other
 **/test_hars
 *.csv
 *.har
+food_or_non_food.json
