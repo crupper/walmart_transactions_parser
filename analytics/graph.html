@@ -16,13 +16,29 @@
         }
     </style>
 </head>
-<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+<body class="bg-gray-100 p-4">
 
     <!-- Main Container -->
-    <div class="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-7xl flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
-        
-        <!-- Left Side: Single Item Chart -->
-        <div class="w-full md:w-1/2 flex flex-col items-center p-4">
+    <div class="w-full max-w-7xl mx-auto space-y-6">
+
+        <!-- Top: Price Movement Charts -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div class="bg-white p-6 rounded-3xl shadow-2xl">
+                <h2 class="text-2xl font-bold mb-4 text-center">Top Price Increases</h2>
+                <div class="w-full bg-gray-50 rounded-lg p-4 shadow-inner">
+                    <canvas id="priceIncreaseChart"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-6 rounded-3xl shadow-2xl">
+                <h2 class="text-2xl font-bold mb-4 text-center">Top Price Decreases</h2>
+                <div class="w-full bg-gray-50 rounded-lg p-4 shadow-inner">
+                    <canvas id="priceDecreaseChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Middle: Single Item Chart -->
+        <div class="bg-white p-6 rounded-3xl shadow-2xl">
             <h1 class="text-2xl font-bold mb-4 text-center">Historical Price Tracker</h1>
             <div class="w-full mb-4">
                 <label for="item-select" class="block text-gray-700 font-semibold mb-2">Select an Item:</label>
@@ -34,14 +50,22 @@
             </div>
         </div>
 
-        <!-- Right Side: Multi-Line Chart -->
-        <div class="w-full md:w-1/2 flex flex-col items-center p-4">
-            <h2 class="text-2xl font-bold mb-4 text-center">All Items with Price Changes</h2>
-            <div class="w-full bg-gray-50 rounded-lg p-4 shadow-inner">
-                <canvas id="multiPriceChart"></canvas>
-            </div>
+        <!-- Bottom: Data Table -->
+        <div class="bg-white p-6 rounded-3xl shadow-2xl">
+            <h2 class="text-2xl font-bold mb-4 text-center">Price Change Summary</h2>
+            <table class="w-full text-left" id="price-table">
+                <thead class="bg-gray-200">
+                    <tr>
+                        <th class="p-4 cursor-pointer" data-sort="item_name">Item Name</th>
+                        <th class="p-4 cursor-pointer" data-sort="earliest_price">Earliest Price</th>
+                        <th class="p-4 cursor-pointer" data-sort="latest_price">Latest Price</th>
+                        <th class="p-4 cursor-pointer" data-sort="price_change">Price Change (%)</th>
+                    </tr>
+                </thead>
+                <tbody id="price-table-body"></tbody>
+            </table>
         </div>
-        
+
     </div>
 
     <script>
@@ -49,7 +73,8 @@
         const itemSelect = document.getElementById('item-select');
         const singleChartTitle = document.getElementById('single-chart-title');
         let priceChart = null;
-        let multiPriceChart = null;
+        let priceIncreaseChart = null;
+        let priceDecreaseChart = null;
 
         let allData = {};
 
@@ -119,22 +144,12 @@
             });
         }
 
-        // --- Multi-Line Chart ---
-        function createMultiLineChart(data) {
-            // Filter out items with no price changes
-            const filteredItems = Object.keys(data).filter(item => {
-                const prices = data[item];
-                if (prices.length <= 1) return false;
-                const firstPrice = prices[0].normalized_cost;
-                const lastPrice = prices[prices.length - 1].normalized_cost;
-                return firstPrice !== lastPrice;
-            });
-
-            // Create datasets for each item
-            const datasets = filteredItems.map(item => {
-                const prices = data[item];
+        // --- Price Movement Charts ---
+        function createPriceMovementChart(canvasId, items, title) {
+            const datasets = items.map(item => {
+                const prices = allData[item.item_name];
                 return {
-                    label: item,
+                    label: item.item_name,
                     data: prices.map(p => ({ x: new Date(p.date), y: p.normalized_cost })),
                     borderColor: getRandomColor(),
                     tension: 0.2,
@@ -142,12 +157,7 @@
                 };
             });
 
-            if (multiPriceChart) {
-                multiPriceChart.destroy();
-            }
-
-            const ctx = document.getElementById('multiPriceChart').getContext('2d');
-            multiPriceChart = new Chart(ctx, {
+            const chart = new Chart(document.getElementById(canvasId).getContext('2d'), {
                 type: 'line',
                 data: {
                     datasets: datasets
@@ -184,6 +194,7 @@
                     }
                 }
             });
+            return chart;
         }
 
         // --- Data Loading and Initialization ---
@@ -211,8 +222,32 @@
                     createSingleLineChart(allData[initialItem], initialItem);
                 }
 
-                // Create the multi-line chart
-                createMultiLineChart(allData);
+                // Create the price movement charts
+                const priceChanges = Object.keys(allData).map(item => {
+                    const prices = allData[item];
+                    if (prices.length < 2) return null;
+
+                    const earliest = prices[0];
+                    const latest = prices[prices.length - 1];
+                    const priceChange = ((latest.normalized_cost - earliest.normalized_cost) / earliest.normalized_cost) * 100;
+
+                    return {
+                        item_name: item,
+                        price_change: priceChange
+                    };
+                }).filter(Boolean);
+
+                const increases = priceChanges.filter(item => item.price_change > 0).sort((a, b) => b.price_change - a.price_change).slice(0, 5);
+                const decreases = priceChanges.filter(item => item.price_change < 0).sort((a, b) => a.price_change - b.price_change).slice(0, 5);
+
+                if (priceIncreaseChart) priceIncreaseChart.destroy();
+                priceIncreaseChart = createPriceMovementChart('priceIncreaseChart', increases, 'Top Price Increases');
+
+                if (priceDecreaseChart) priceDecreaseChart.destroy();
+                priceDecreaseChart = createPriceMovementChart('priceDecreaseChart', decreases, 'Top Price Decreases');
+
+                // Create the price table
+                createPriceTable(allData);
 
             } catch (error) {
                 console.error("There was a problem fetching the data:", error);
@@ -228,6 +263,79 @@
 
         // Load data when the page is loaded
         document.addEventListener('DOMContentLoaded', loadDataAndPopulateCharts);
+
+        // --- Data Table ---
+        function createPriceTable(data) {
+            const tableBody = document.getElementById('price-table-body');
+            tableBody.innerHTML = '';
+
+            const tableData = Object.keys(data).map(item => {
+                const prices = data[item];
+                if (prices.length === 0) return null;
+
+                const earliest = prices[0];
+                const latest = prices[prices.length - 1];
+                const priceChange = ((latest.normalized_cost - earliest.normalized_cost) / earliest.normalized_cost) * 100;
+
+                return {
+                    item_name: item,
+                    earliest_price: earliest.normalized_cost.toFixed(2),
+                    latest_price: latest.normalized_cost.toFixed(2),
+                    price_change: priceChange.toFixed(2)
+                };
+            }).filter(Boolean);
+
+            let sortColumn = 'price_change';
+            let sortDirection = 'desc';
+
+            function renderTable() {
+                tableBody.innerHTML = '';
+
+                tableData.sort((a, b) => {
+                    let aValue = a[sortColumn];
+                    let bValue = b[sortColumn];
+
+                    if (!isNaN(aValue) && !isNaN(bValue)) {
+                        aValue = parseFloat(aValue);
+                        bValue = parseFloat(bValue);
+                    }
+
+                    if (aValue < bValue) return sortDirection === 'asc' ? -1 : 1;
+                    if (aValue > bValue) return sortDirection === 'asc' ? 1 : -1;
+                    return 0;
+                });
+
+                tableData.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b';
+
+                    const priceChangeClass = item.price_change > 0 ? 'text-red-500' : 'text-green-500';
+
+                    row.innerHTML = `
+                        <td class="p-4">${item.item_name}</td>
+                        <td class="p-4">${item.earliest_price}</td>
+                        <td class="p-4">${item.latest_price}</td>
+                        <td class="p-4 ${priceChangeClass}">${item.price_change}%</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            }
+
+            document.querySelectorAll('#price-table th').forEach(header => {
+                header.addEventListener('click', () => {
+                    const newSortColumn = header.dataset.sort;
+                    if (sortColumn === newSortColumn) {
+                        sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        sortColumn = newSortColumn;
+                        sortDirection = 'desc';
+                    }
+                    renderTable();
+                });
+            });
+
+            renderTable();
+        }
     </script>
 </body>
 </html>
