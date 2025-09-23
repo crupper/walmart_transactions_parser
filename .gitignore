@@ -2,5 +2,7 @@
 **/test_hars
 *.csv
 *.har
+*.pyc
+__pycache__/
 food_or_non_food.json
 historical_prices_data.json

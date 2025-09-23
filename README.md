@@ -71,3 +71,30 @@ The script will automatically create a **`food_or_non_food.json`** file. Any new
 ```
 
 After updating the JSON file, you can run the script again, and the **`is_food`** column will be populated with your updated values.
+
+-----
+
+### Testing
+
+This project includes a suite of unit tests to ensure the scripts are working correctly. The tests are located in the `tests` directory and use Python's built-in `unittest` framework.
+
+#### Running the Tests
+
+To run the tests, navigate to the project root and run the following command:
+
+```bash
+python -m unittest discover tests
+```
+
+#### How the Tests Work
+
+The tests use the `unittest.mock` library to isolate the functions from the file system. This allows the tests to run without creating or modifying any real files. The tests cover the following scenarios:
+
+*   **`har_parser.py`**:
+    *   Correctly parses a valid HAR file.
+    *   Handles file not found and invalid JSON errors.
+    *   Correctly identifies new and existing items in the `food_or_non_food.json` file.
+*   **`analytics/historical_prices.py`**:
+    *   Correctly reads and processes valid CSV files.
+    *   Handles file not found and invalid CSV errors.
+    *   Correctly processes multiple CSV files and creates a single JSON file.

@@ -47,3 +47,9 @@ Once the server is running, you can access the interactive dashboard in your web
     `http://localhost:8000/analytics/graph.html`
 
 You should now see the **"Historical Price Tracker"** page with both the single-item and multi-line charts populated with your data.
+
+---
+
+### Testing
+
+The `historical_prices.py` script is covered by unit tests. For more information on how to run the tests, please refer to the main `README.md` file in the project root.
