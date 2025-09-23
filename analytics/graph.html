@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Historical Price Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js and date-fns adapter -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen p-4">
+
+    <!-- Main Container -->
+    <div class="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-7xl flex flex-col md:flex-row space-y-6 md:space-y-0 md:space-x-6">
+        
+        <!-- Left Side: Single Item Chart -->
+        <div class="w-full md:w-1/2 flex flex-col items-center p-4">
+            <h1 class="text-2xl font-bold mb-4 text-center">Historical Price Tracker</h1>
+            <div class="w-full mb-4">
+                <label for="item-select" class="block text-gray-700 font-semibold mb-2">Select an Item:</label>
+                <select id="item-select" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 ease-in-out"></select>
+            </div>
+            <div class="w-full bg-gray-50 rounded-lg p-4 shadow-inner">
+                <h2 id="single-chart-title" class="text-lg font-semibold mb-2 text-center"></h2>
+                <canvas id="priceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Right Side: Multi-Line Chart -->
+        <div class="w-full md:w-1/2 flex flex-col items-center p-4">
+            <h2 class="text-2xl font-bold mb-4 text-center">All Items with Price Changes</h2>
+            <div class="w-full bg-gray-50 rounded-lg p-4 shadow-inner">
+                <canvas id="multiPriceChart"></canvas>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        const API_URL = 'historical_prices_data.json';
+        const itemSelect = document.getElementById('item-select');
+        const singleChartTitle = document.getElementById('single-chart-title');
+        let priceChart = null;
+        let multiPriceChart = null;
+
+        let allData = {};
+
+        // Function to generate a random hex color
+        function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+                color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+        }
+
+        // --- Single Item Chart ---
+        function createSingleLineChart(data, title) {
+            singleChartTitle.textContent = title;
+            const dates = data.map(d => d.date);
+            const prices = data.map(d => d.normalized_cost);
+
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dates,
+                    datasets: [{
+                        label: 'Price ($)',
+                        data: prices,
+                        borderColor: '#2563eb',
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        fill: true,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true
+                        },
+                        title: {
+                            display: false,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'day'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Price ($)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Multi-Line Chart ---
+        function createMultiLineChart(data) {
+            // Filter out items with no price changes
+            const filteredItems = Object.keys(data).filter(item => {
+                const prices = data[item];
+                if (prices.length <= 1) return false;
+                const firstPrice = prices[0].normalized_cost;
+                const lastPrice = prices[prices.length - 1].normalized_cost;
+                return firstPrice !== lastPrice;
+            });
+
+            // Create datasets for each item
+            const datasets = filteredItems.map(item => {
+                const prices = data[item];
+                return {
+                    label: item,
+                    data: prices.map(p => ({ x: new Date(p.date), y: p.normalized_cost })),
+                    borderColor: getRandomColor(),
+                    tension: 0.2,
+                    fill: false
+                };
+            });
+
+            if (multiPriceChart) {
+                multiPriceChart.destroy();
+            }
+
+            const ctx = document.getElementById('multiPriceChart').getContext('2d');
+            multiPriceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'month'
+                            },
+                            title: {
+                                display: true,
+                                text: 'Date'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Price ($)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Data Loading and Initialization ---
+        async function loadDataAndPopulateCharts() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                allData = await response.json();
+
+                // Populate the dropdown menu
+                itemSelect.innerHTML = '';
+                const items = Object.keys(allData);
+                items.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item;
+                    option.textContent = item;
+                    itemSelect.appendChild(option);
+                });
+
+                // Set initial chart data
+                const initialItem = items[0];
+                if (initialItem) {
+                    createSingleLineChart(allData[initialItem], initialItem);
+                }
+
+                // Create the multi-line chart
+                createMultiLineChart(allData);
+
+            } catch (error) {
+                console.error("There was a problem fetching the data:", error);
+                alert("Could not load data. Please make sure the Python script has been run and the JSON file exists.");
+            }
+        }
+
+        // Event listener for dropdown change
+        itemSelect.addEventListener('change', (event) => {
+            const selectedItem = event.target.value;
+            createSingleLineChart(allData[selectedItem], selectedItem);
+        });
+
+        // Load data when the page is loaded
+        document.addEventListener('DOMContentLoaded', loadDataAndPopulateCharts);
+    </script>
+</body>
+</html>
