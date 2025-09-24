@@ -277,6 +277,8 @@
                 const latest = prices[prices.length - 1];
                 const priceChange = ((latest.normalized_cost - earliest.normalized_cost) / earliest.normalized_cost) * 100;
 
+                if (priceChange === 0) return null; // Filter out 0% changes
+
                 return {
                     item_name: item,
                     earliest_price: earliest.normalized_cost.toFixed(2),
