@@ -15,7 +15,7 @@ def read_csv(file_path):
             for row in reader:
                 try:
                     # Unpack the row, handling potential errors
-                    _, date_str, item_name, _, quantity_str, cost_str = row
+                    _, date_str, item_name, _, quantity_str, cost_str, *_ = row
                     
                     # Convert cost and quantity to float
                     cost = float(cost_str)

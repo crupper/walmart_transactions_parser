@@ -30,6 +30,15 @@ class TestParseWalmartHar(unittest.TestCase):
                                         "order": {
                                             "id": "12345",
                                             "title": "Order delivered on Jan 1, 2024",
+                                            "priceDetails": {
+                                                "grandTotal": {"value": 20.0}
+                                            },
+                                            "paymentMethods": [
+                                                {
+                                                    "title": "OnePay CashRewards",
+                                                    "description": "Ending in 0000"
+                                                }
+                                            ],
                                             "groups_2101": [
                                                 {
                                                     "items": [
@@ -85,6 +94,10 @@ class TestParseWalmartHar(unittest.TestCase):
             self.assertEqual(len(rows), 2)
             self.assertEqual(rows[0]['item_name'], "Test Item")
             self.assertEqual(rows[1]['item_name'], "Another Item")
+            self.assertEqual(rows[0]['order_total'], "20.0")
+            self.assertEqual(rows[0]['credit_card'], "OnePay CashRewards Ending in 0000")
+            self.assertEqual(rows[1]['order_total'], "20.0")
+            self.assertEqual(rows[1]['credit_card'], "OnePay CashRewards Ending in 0000")
 
     @patch("builtins.print")
     def test_parse_walmart_har_file_not_found(self, mock_print):

@@ -76,8 +76,7 @@ def parse_walmart_har(har_file_path, output_dir):
         resource_type = entry.get('_resourceType', 'N/A')
 
         # Check if the URL and resource type match our criteria
-        if ('/orchestra/orders/graphql/getOrder/' in url and
-            resource_type in ['xhr', 'fetch']):
+        if '/orchestra/orders/graphql/getOrder/' in url:
             print(f"Found a matching request: {url}")
             
             # Remove header and call stack information to make the file cleaner
@@ -109,6 +108,22 @@ def parse_walmart_har(har_file_path, output_dir):
                 order_date = date_match.group(1) if date_match else order_title
 
                 print(f"--> Successfully extracted data for Order ID: {order_id}")
+
+                # Extract order total and payment method
+                price_details = order_data.get('priceDetails', {})
+                order_total = price_details.get('grandTotal', {}).get('value')
+                payment_methods = order_data.get('paymentMethods', [])
+                credit_card = None
+                if payment_methods:
+                    payment_method = payment_methods[0]
+                    title = payment_method.get('title')
+                    description = payment_method.get('description')
+                    parts = []
+                    if title:
+                        parts.append(title)
+                    if description:
+                        parts.append(description)
+                    credit_card = " ".join(parts)
                 
                 # We need to loop through the order groups to find the items
                 groups = order_data.get('groups_2101', [])
@@ -129,7 +144,9 @@ def parse_walmart_har(har_file_path, output_dir):
                                 'item_name': item_name,
                                 'is_food': item_type,
                                 'quantity': quantity,
-                                'price': price
+                                'price': price,
+                                'order_total': order_total,
+                                'credit_card': credit_card
                             })
                             print(f"----> Collected item: {item_name} (Type: {item_type})")
                 
@@ -163,7 +180,7 @@ def parse_walmart_har(har_file_path, output_dir):
     # Write the data to a CSV file
     try:
         with open(output_csv_path, 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['order_id', 'order_date', 'item_name', 'is_food', 'quantity', 'price']
+            fieldnames = ['order_id', 'order_date', 'item_name', 'is_food', 'quantity', 'price', 'order_total', 'credit_card']
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
             
             writer.writeheader()

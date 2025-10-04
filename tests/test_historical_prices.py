@@ -20,18 +20,23 @@ class TestProcessAndSaveData(unittest.TestCase):
         os.makedirs(self.analytics_dir, exist_ok=True)
 
     def tearDown(self):
+        # Only remove files created by the test, to avoid deleting the whole directory
+        test_files = ["sample1.csv", "sample2.csv"]
         if os.path.exists(self.output_dir):
-            for f in os.listdir(self.output_dir):
-                os.remove(os.path.join(self.output_dir, f))
-            os.rmdir(self.output_dir)
-        
+            for f in test_files:
+                file_path = os.path.join(self.output_dir, f)
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+
         json_file_path = os.path.join(self.analytics_dir, "historical_prices_data.json")
         if os.path.exists(json_file_path):
             os.remove(json_file_path)
 
     @patch("builtins.print")
-    def test_process_and_save_data_no_csv_files(self, mock_print):
+    @patch("analytics.historical_prices.os.listdir")
+    def test_process_and_save_data_no_csv_files(self, mock_listdir, mock_print):
         """Test that no CSV files are found."""
+        mock_listdir.return_value = []
         process_and_save_data()
         mock_print.assert_any_call("No CSV files found in the 'output' directory.")
 
@@ -40,13 +45,13 @@ class TestProcessAndSaveData(unittest.TestCase):
         # Create some sample CSV files
         with open(os.path.join(self.output_dir, "sample1.csv"), 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price"])
-            writer.writerow(["12345", "Jan 01, 2024", "Test Item", "unknown", "1", "10.00"])
+            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price", "order_total", "credit_card"])
+            writer.writerow(["12345", "Jan 01, 2024", "Test Item", "unknown", "1", "10.00", "10.00", "Visa 1234"])
         
         with open(os.path.join(self.output_dir, "sample2.csv"), 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price"])
-            writer.writerow(["12345", "Jan 02, 2024", "Test Item", "unknown", "1", "12.00"])
+            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price", "order_total", "credit_card"])
+            writer.writerow(["12345", "Jan 02, 2024", "Test Item", "unknown", "1", "12.00", "12.00", "Visa 1234"])
 
         process_and_save_data()
 
@@ -80,9 +85,9 @@ class TestReadCsv(unittest.TestCase):
         self.sample_csv_path = os.path.join(self.csv_dir, "sample.csv")
         with open(self.sample_csv_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price"])
-            writer.writerow(["12345", "Jan 01, 2024", "Test Item", "unknown", "1", "10.00"])
-            writer.writerow(["12345", "Jan 01, 2024", "Another Item", "unknown", "2", "5.00"])
+            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price", "order_total", "credit_card"])
+            writer.writerow(["12345", "Jan 01, 2024", "Test Item", "unknown", "1", "10.00", "15.00", "Visa 1234"])
+            writer.writerow(["12345", "Jan 01, 2024", "Another Item", "unknown", "2", "5.00", "15.00", "Visa 1234"])
 
     def tearDown(self):
         for f in os.listdir(self.csv_dir):
@@ -108,11 +113,11 @@ class TestReadCsv(unittest.TestCase):
         invalid_csv_path = os.path.join(self.csv_dir, "invalid.csv")
         with open(invalid_csv_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.writer(f)
-            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price"])
+            writer.writerow(["order_id", "order_date", "item_name", "is_food", "quantity", "price", "order_total", "credit_card"])
             writer.writerow(["12345", "Jan 01, 2024", "Test Item", "unknown", "1"])
         
         read_csv(invalid_csv_path)
-        mock_print.assert_called_with("Skipping row due to formatting error: ['12345', 'Jan 01, 2024', 'Test Item', 'unknown', '1']. Error: not enough values to unpack (expected 6, got 5)")
+        mock_print.assert_called_with("Skipping row due to formatting error: ['12345', 'Jan 01, 2024', 'Test Item', 'unknown', '1']. Error: not enough values to unpack (expected at least 6, got 5)")
 
     def test_read_csv_empty_file(self):
         """Test that an empty file is handled correctly."""
