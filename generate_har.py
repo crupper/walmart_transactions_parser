@@ -4,6 +4,7 @@ import sys
 import os
 import random
 from datetime import datetime
+from typing import Optional
 from playwright.async_api import async_playwright, TimeoutError
 from playwright_stealth import Stealth
 
@@ -15,15 +16,15 @@ async def navigate_to_orders(page):
     print("[ACTION] Navigating directly to Walmart Purchase History...")
     await page.goto("https://www.walmart.com/orders", wait_until="domcontentloaded", timeout=60000)
     
-    print("[WAIT] Waiting 10 seconds for Walmart bot checks and page stability...")
-    await asyncio.sleep(10)
+    print("[WAIT] Waiting 25 seconds for Walmart bot checks and page stability...")
+    await asyncio.sleep(25)
     
     print("[CHECK] Verifying login status...")
     # Check if login is needed
     if await page.query_selector("button:has-text('Sign in'), input[type='email']"):
         print("[AUTH] Login required. Please log in manually in the browser window.")
         print("[WAIT] Waiting indefinitely for manual login and order list to appear...")
-        await page.wait_for_selector("div[data-testid^='order-']", timeout=0)
+        await page.wait_for_selector("div[data-testid^='order-']", timeout=7000)
         print("[AUTH] Login successful or order list detected.")
     
     print("[STATUS] Reached Purchase History page.")
@@ -95,7 +96,29 @@ async def run(args):
                     print(f"[WAIT] Waiting for order {order_index} details page to load...")
                     await human_delay(4000, 7000)
                     
-                    # 4. Navigate back to the list
+                    # 4. Extract the order date from the h1 element
+                    h1_element = await page.query_selector("h1")
+                    order_date = None
+                    if h1_element:
+                        h1_text = await h1_element.text_content()
+                        h1_text = h1_text.strip() if h1_text else ""
+                        print(f"[INFO] Order {order_index} date: {h1_text}")
+                        try:
+                            date_str = h1_text.replace(" order", "").replace(" purchase", "")
+                            order_date = datetime.strptime(date_str, "%b %d, %Y")
+                        except ValueError:
+                            print(f"[WARN] Could not parse date '{h1_text}'")
+                    else:
+                        print(f"[WARN] Could not find h1 element for order {order_index}")
+                    
+                    # 5. Check if we've reached the end date
+                    if args.end and order_date:
+                        end_date = datetime.strptime(args.end, "%m/%d/%Y")
+                        if order_date < end_date:
+                            print(f"[INFO] Reached orders before {args.end}. Stopping.")
+                            break
+                    
+                    # 5. Navigate back to the list
                     print(f"[ACTION] Navigating back to the orders list...")
                     await page.go_back(wait_until="domcontentloaded")
                     
@@ -121,6 +144,7 @@ async def run(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Simplified Walmart HAR Generator")
     parser.add_argument("--output", default="walmart_orders.har", help="Output HAR file path")
+    parser.add_argument("--end", help="Stop when reaching orders before this date (MM/DD/YYYY)")
     parser.add_argument("--session-dir", default="./walmart_session", help="Directory for persistent browser session")
     
     args = parser.parse_args()
