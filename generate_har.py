@@ -63,7 +63,25 @@ async def run(args):
                 
                 if not order_div:
                     print(f"[FINISHED] No more order divs found on this page (stopped at index {order_index}).")
-                    break
+                    # Check for next page button
+                    print("[CHECK] Checking for next page button...")
+                    next_button = await page.query_selector("button[data-automation-id='next-pages-button']")
+                    if next_button:
+                        is_disabled = await next_button.get_attribute("disabled")
+                        if is_disabled is None:
+                            print("[ACTION] Clicking 'Next page' button...")
+                            await next_button.click()
+                            await page.wait_for_load_state("domcontentloaded")
+                            await asyncio.sleep(2)
+                            order_index = 0
+                            print("[STATUS] Navigated to next page, continuing...")
+                            continue
+                        else:
+                            print("[FINISHED] Next page button is disabled. End of orders.")
+                            break
+                    else:
+                        print("[FINISHED] No next page button found. End of orders.")
+                        break
                 
                 print(f"[STATUS] Found order {order_index}. Preparing to process...")
                 
