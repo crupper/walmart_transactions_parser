@@ -7,3 +7,4 @@
 __pycache__/
 food_or_non_food.json
 historical_prices_data.json
+walmart_session/

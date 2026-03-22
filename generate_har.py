@@ -1,0 +1,109 @@
+import asyncio
+import argparse
+import sys
+import os
+import random
+from datetime import datetime
+from playwright.async_api import async_playwright, TimeoutError
+from playwright_stealth import Stealth
+
+async def human_delay(min_ms=1000, max_ms=3000):
+    """Adds a random delay to simulate human behavior."""
+    await asyncio.sleep(random.uniform(min_ms, max_ms) / 1000.0)
+
+async def navigate_to_orders(page):
+    print("[ACTION] Navigating directly to Walmart Purchase History...")
+    await page.goto("https://www.walmart.com/orders", wait_until="domcontentloaded", timeout=60000)
+    
+    print("[WAIT] Waiting 10 seconds for Walmart bot checks and page stability...")
+    await asyncio.sleep(10)
+    
+    print("[CHECK] Verifying login status...")
+    # Check if login is needed
+    if await page.query_selector("button:has-text('Sign in'), input[type='email']"):
+        print("[AUTH] Login required. Please log in manually in the browser window.")
+        print("[WAIT] Waiting indefinitely for manual login and order list to appear...")
+        await page.wait_for_selector("div[data-testid^='order-']", timeout=0)
+        print("[AUTH] Login successful or order list detected.")
+    
+    print("[STATUS] Reached Purchase History page.")
+
+async def run(args):
+    async with async_playwright() as p:
+        user_data_dir = os.path.abspath(args.session_dir)
+        print(f"[CONFIG] Using session directory: {user_data_dir}")
+        
+        print("[ACTION] Launching browser context...")
+        context = await p.chromium.launch_persistent_context(
+            user_data_dir=user_data_dir,
+            headless=False,
+            record_har_path=args.output,
+            record_har_omit_content=False,
+            slow_mo=100,
+            user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
+        )
+        
+        page = context.pages[0] if context.pages else await context.new_page()
+        
+        print("[ACTION] Applying stealth measures...")
+        stealth = Stealth()
+        await stealth.apply_stealth_async(page)
+        await page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+
+        try:
+            await navigate_to_orders(page)
+            
+            order_index = 0
+            while True:
+                # 1. Look for order index
+                order_selector = f"div[data-testid='order-{order_index}']"
+                print(f"[SEARCH] Looking for order element with index {order_index}...")
+                order_div = await page.query_selector(order_selector)
+                
+                if not order_div:
+                    print(f"[FINISHED] No more order divs found on this page (stopped at index {order_index}).")
+                    break
+                
+                print(f"[STATUS] Found order {order_index}. Preparing to process...")
+                
+                # 2. Click "View details" button inside this div
+                view_details_btn = await order_div.query_selector("button:has-text('View details')")
+                if view_details_btn:
+                    print(f"[ACTION] Clicking 'View details' for order {order_index}...")
+                    await view_details_btn.click()
+                    
+                    # 3. Wait for the details to load (simple delay for now)
+                    print(f"[WAIT] Waiting for order {order_index} details page to load...")
+                    await human_delay(4000, 7000)
+                    
+                    # 4. Navigate back to the list
+                    print(f"[ACTION] Navigating back to the orders list...")
+                    await page.go_back(wait_until="domcontentloaded")
+                    
+                    # 5. Wait for the list to reappear before next loop
+                    print(f"[WAIT] Waiting for the order list page to be interactable again...")
+                    await page.wait_for_load_state("domcontentloaded")
+                    await page.wait_for_selector("div[data-testid^='order-']", timeout=20000)
+                    print(f"[STATUS] Order list is back and ready.")
+                    await human_delay(4000, 7000)
+                else:
+                    print(f"[ERROR] Could not find 'View details' button for order {order_index}.")
+                
+                # Move to next order index on this page
+                order_index += 1
+
+        except Exception as e:
+            print(f"[CRITICAL] An error occurred during execution: {e}")
+        finally:
+            print("Closing browser...")
+            await context.close()
+            print(f"HAR file saved to: {args.output}")
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Simplified Walmart HAR Generator")
+    parser.add_argument("--output", default="walmart_orders.har", help="Output HAR file path")
+    parser.add_argument("--session-dir", default="./walmart_session", help="Directory for persistent browser session")
+    
+    args = parser.parse_args()
+    asyncio.run(run(args))
