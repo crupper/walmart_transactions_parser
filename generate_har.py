@@ -56,6 +56,7 @@ async def run(args):
             await navigate_to_orders(page)
             
             order_index = 0
+            total_order_count = 0
             while True:
                 # 1. Look for order index
                 order_selector = f"div[data-testid='order-{order_index}']"
@@ -73,7 +74,7 @@ async def run(args):
                             print("[ACTION] Clicking 'Next page' button...")
                             await next_button.click()
                             await page.wait_for_load_state("domcontentloaded")
-                            await asyncio.sleep(2)
+                            await page.wait_for_selector("button[aria-label='Next page']", timeout=10000)
                             order_index = 0
                             print("[STATUS] Navigated to next page, continuing...")
                             continue
@@ -99,7 +100,7 @@ async def run(args):
                     if h1_element:
                         h1_text = await h1_element.text_content()
                         h1_text = h1_text.strip() if h1_text else ""
-                        print(f"[INFO] Order {order_index} date: {h1_text}")
+                        print(f"[INFO] Order {total_order_count} date: {h1_text}")
                         try:
                             date_str = h1_text.replace(" order", "").replace(" purchase", "")
                             order_date = datetime.strptime(date_str, "%b %d, %Y")
@@ -128,6 +129,7 @@ async def run(args):
                 
                 # Move to next order index on this page
                 order_index += 1
+                total_order_count += 1
 
         except Exception as e:
             print(f"[CRITICAL] An error occurred during execution: {e}")
