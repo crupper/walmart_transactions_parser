@@ -71,16 +71,25 @@ async def get_order_identifier(order_div) -> Optional[str]:
 
 async def scan_page_orders(page):
     """Scans the current page for orders and returns their metadata with date and total."""
-    print("[SCAN] Scanning current page for orders...")
-    all_divs = await page.query_selector_all("div[data-testid^='order-']")
-    
-    # Filter for strictly 'order-0', 'order-1', etc. to avoid 'order-status-tracker'
     order_divs = []
-    for div in all_divs:
-        testid = await div.get_attribute("data-testid")
-        if testid and re.fullmatch(r'order-\d+', testid):
-            order_divs.append(div)
+    for attempt in range(2):
+        print(f"[SCAN] Scanning current page for orders (attempt {attempt + 1})...")
+        all_divs = await page.query_selector_all("div[data-testid^='order-']")
+        
+        # Filter for strictly 'order-0', 'order-1', etc. to avoid 'order-status-tracker'
+        order_divs = []
+        for div in all_divs:
+            testid = await div.get_attribute("data-testid")
+            if testid and re.fullmatch(r'order-\d+', testid):
+                order_divs.append(div)
+        
+        if order_divs:
+            break
             
+        if attempt == 0:
+            print("[WAIT] No orders found. Waiting 5 seconds for page to load content...")
+            await asyncio.sleep(5)
+
     found_orders = []
     for div in order_divs:
         oid = await get_order_identifier(div)
@@ -163,13 +172,15 @@ async def run(args):
                     order_div = await page.query_selector(order_selector)
                     
                     if not order_div:
-                        print(f"[ERROR] Could not re-find order element {order_info['selector_index']}")
-                        continue
+                        print(f"[RECOVER] Could not re-find {order_info['selector_index']}. Breaking for a fresh page scan...")
+                        await asyncio.sleep(2) # Give the DOM a moment to settle
+                        break
 
                     # Double check ID if possible
                     current_oid = await get_order_identifier(order_div)
                     if oid and current_oid != oid:
-                        print(f"[WARN] Order ID mismatch! Expected {oid}, found {current_oid}. Page might have shifted.")
+                        print(f"[RECOVER] Order ID mismatch (Expected {oid}, found {current_oid}). Breaking for a fresh page scan...")
+                        await asyncio.sleep(2)
                         break
 
                     # 3. Click "View details" button inside this div
