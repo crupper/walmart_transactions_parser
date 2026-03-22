@@ -59,7 +59,7 @@ async def run(args):
             while True:
                 # 1. Look for order index
                 order_selector = f"div[data-testid='order-{order_index}']"
-                print(f"[SEARCH] Looking for order element with index {order_index}...")
+                # print(f"[SEARCH] Looking for order element with index {order_index}...")
                 order_div = await page.query_selector(order_selector)
                 
                 if not order_div:
@@ -83,17 +83,14 @@ async def run(args):
                     else:
                         print("[FINISHED] No next page button found. End of orders.")
                         break
-                
-                print(f"[STATUS] Found order {order_index}. Preparing to process...")
-                
+                                
                 # 2. Click "View details" button inside this div
                 view_details_btn = await order_div.query_selector("button:has-text('View details')")
                 if view_details_btn:
-                    print(f"[ACTION] Clicking 'View details' for order {order_index}...")
+                    # print(f"[ACTION] Clicking 'View details' for order {order_index}...")
                     await view_details_btn.click()
                     
                     # 3. Wait for the details to load (simple delay for now)
-                    print(f"[WAIT] Waiting for order {order_index} details page to load...")
                     await human_delay(4000, 7000)
                     
                     # 4. Extract the order date from the h1 element
@@ -119,14 +116,12 @@ async def run(args):
                             break
                     
                     # 5. Navigate back to the list
-                    print(f"[ACTION] Navigating back to the orders list...")
+                    # print(f"[ACTION] Navigating back to the orders list...")
                     await page.go_back(wait_until="domcontentloaded")
                     
                     # 5. Wait for the list to reappear before next loop
-                    print(f"[WAIT] Waiting for the order list page to be interactable again...")
                     await page.wait_for_load_state("domcontentloaded")
                     await page.wait_for_selector("div[data-testid^='order-']", timeout=20000)
-                    print(f"[STATUS] Order list is back and ready.")
                     await human_delay(4000, 7000)
                 else:
                     print(f"[ERROR] Could not find 'View details' button for order {order_index}.")
